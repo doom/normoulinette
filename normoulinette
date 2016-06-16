@@ -92,10 +92,10 @@ class FileChecker(object):
             return
 
     def checkProto(self):
-        exp = re.compile('(.*),(.*),(.*),(.*),(.*)\);?')
+        exp = re.compile('[a-z0-9_]+\(([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*)\);?')
         res = re.search(exp, self.curLine)
         if res:
-            self.printNormError("La fonction " + res.group()[1:].split('(')[0].replace('\t', '    ').split(' ')[-1] + "() a plus de 4 paramètres")
+            self.printNormError("La fonction " + res.group().split('(')[0].replace('\t', '    ').split(' ')[-1] + "() a plus de 4 paramètres")
         if self.path.endswith(".c") and re.compile('[ \t]*[a-z]*[ \t]*[a-z]*[ \t]*[a-z]+[ \t]+[a-zA-Z0-9_]+\(.*\);[ \t]*$').match(self.curLine):
             self.printNormError("Déclaration d'un prototype dans un fichier .c")
 
@@ -103,7 +103,7 @@ class FileChecker(object):
         """Lignes trop longues, espaces, commentaires"""
         tmp = self.curLine.replace('\t', '    ')
         l = len(tmp)
-        if l >= 80:
+        if l > 80:
             self.printNormError("Ligne trop longue")
         elif l > 0 and tmp[-1] == ' ':
             self.printNormError("Espace en fin de ligne")
@@ -123,7 +123,7 @@ class FileChecker(object):
         res = re.search(exp, self.curLine)
         if res:
             self.printNormError("Espace manquant après le mot-clef " + res.group()[1:-1])
-        if self.curLine.find('return') > 0 and re.compile('.*return \(.*\);.*').match(self.curLine) == None:
+        if self.curLine.find('return') >= 0 and self.curLine.find('return ;') < 0 and re.compile('.*return \(.*\);.*').match(self.curLine) == None:
             self.printNormError("Utilisation du mot-clef return sans parenthèses")
         exp = re.compile(';.')
         if re.search(exp, self.curLine):
