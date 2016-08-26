@@ -119,24 +119,26 @@ class FileChecker(object):
 
     def checkSpaces(self):
         """Mots-clefs, points-virgules, virgules"""
-        exp = re.compile('[ \t](if|else|return|while)(\()')
-        res = re.search(exp, self.curLine)
-        if res:
-            self.printNormError("Espace manquant après le mot-clef " + res.group()[1:-1])
-        if self.curLine.find('return') >= 0 and self.curLine.find('return ;') < 0 and re.compile('.*return \(.*\);.*').match(self.curLine) == None:
-            self.printNormError("Utilisation du mot-clef return sans parenthèses")
+        if self.path.endswith(".c"):
+            exp = re.compile('[ \t](if|else|return|while)(\()')
+            res = re.search(exp, self.curLine)
+            if res:
+                self.printNormError("Espace manquant après le mot-clef " + res.group()[1:-1])
+            if self.curLine.find('return') >= 0 and self.curLine.find('return ;') < 0 and re.compile('.*return \(.*').match(self.curLine) == None:
+                self.printNormError("Utilisation du mot-clef return sans parenthèses")
         exp = re.compile(';.')
         if re.search(exp, self.curLine):
             self.printNormError("La ligne continue après le point-virgule")
         l = len(self.curLine)
         for i in range(0, l):
-            if self.curLine[i] == ',' and i < l - 1 and self.curLine[i + 1] != ' ':
+            if self.curLine[i] == ',' and i < l - 1 and self.curLine[i + 1] not in (' ', '\'', '"'):
                 self.printNormError("Espace manquant après une virgule")
 
     def checkTypedef(self):
         if re.compile('[ \t]*typedef[ \t]+.*').match(self.curLine):
             if self.curLine.find(';') > 0:
-                if not self.curLine.replace('\t', ' ').split(' ')[-1].startswith("t_"):
+                s = self.curLine.replace('\t', ' ').split(' ')[-1]
+                if not s.startswith("t_") and not s.startswith("*t_"):
                     self.printNormError("Nom de typedef sans t_")
             else:
                 self.inTypedef = True
@@ -206,17 +208,17 @@ class FileChecker(object):
         self.checkDeclaration()
         self.checkProto()
         self.checkNormalMacro()
-        self.checkForbidden()
         self.checkSpaces()
         self.checkOperators()
         self.checkIncludes()
         self.checkTypedef()
-        self.checkStruct()
-        self.checkEnum()
-        self.checkUnion()
         if self.path.endswith(".h"):
+            self.checkEnum()
+            self.checkUnion()
+            self.checkStruct()
             self.checkProtectMacro()
         elif self.path.endswith(".c"):
+            self.checkForbidden()
             self.checkFunction()
         return False
 
