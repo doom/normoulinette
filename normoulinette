@@ -29,7 +29,9 @@ class FileChecker(object):
 
     def printNormError(self, msg, globalScope = False):
         self.errCount += 1
-        fmt = TermFormat.red + TermFormat.bold + '[' + self.path + (":" + str(self.cur) if not globalScope else "") + "] " + TermFormat.white
+        fmt = TermFormat.red + TermFormat.bold + '[' \
+              + self.path + (":" + str(self.cur) if not globalScope else "") \
+              + "] " + TermFormat.white
         print(fmt + msg + TermFormat.nobold)
 
     @property
@@ -98,8 +100,10 @@ class FileChecker(object):
         exp = re.compile('[a-z0-9_]+\(([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*)\);?')
         res = re.search(exp, self.curLine)
         if res:
-            self.printNormError("La fonction " + res.group().split('(')[0].replace('\t', '    ').split(' ')[-1] + "() a plus de 4 paramètres")
-        if self.path.endswith(".c") and re.compile('[ \t]*[a-z]*[ \t]*[a-z]*[ \t]*[a-z]+[ \t]+[a-zA-Z0-9_]+\(.*\);[ \t]*$').match(self.curLine):
+            self.printNormError("La fonction " + res.group().split('(')[0].replace('\t', '    ').split(' ')[-1] \
+                                + "() a plus de 4 paramètres")
+        if self.path.endswith(".c") and \
+           re.compile('[ \t]*[a-z]*[ \t]*[a-z]*[ \t]*[a-z]+[ \t]+[a-zA-Z0-9_]+\(.*\);[ \t]*$').match(self.curLine):
             self.printNormError("Déclaration d'un prototype dans un fichier .c")
 
     def checkCommon(self):
@@ -121,17 +125,15 @@ class FileChecker(object):
             self.lines[self.cur - 1] = self.curLine.split("/*")[0]
 
     def checkSpaces(self):
-        """Mots-clefs, points-virgules, virgules"""
+        """Espaces après les Mots-clefs"""
         if self.path.endswith(".c"):
             exp = re.compile('[ \t](if|else|return|while)(\()')
             res = re.search(exp, self.curLine)
             if res:
                 self.printNormError("Espace manquant après le mot-clef " + res.group()[1:-1])
-            if self.curLine.find('return') >= 0 and self.curLine.find('return ;') < 0 and re.compile('.*return \(.*').match(self.curLine) == None:
+            if self.curLine.find('return') >= 0 and self.curLine.find('return ;') < 0 \
+               and re.compile('.*return \(.*').match(self.curLine) == None:
                 self.printNormError("Utilisation du mot-clef return sans parenthèses")
-        exp = re.compile(';.')
-        if re.search(exp, self.curLine):
-            self.printNormError("La ligne continue après le point-virgule")
         l = len(self.curLine)
         for i in range(0, l):
             if self.curLine[i] == ',' and i < l - 1 and self.curLine[i + 1] not in (' ', '\'', '"'):
@@ -174,28 +176,34 @@ class FileChecker(object):
                 self.printNormError("Nom d'union sans u_")
 
     def checkOperators(self):
-        return
         l = len(self.curLine)
         quote = False
         for i in range(0, l):
             if self.curLine[i] == '"':
                 quote = not quote
-            elif not quote and self.curLine[i] in "+-*/%|&":
-                if i == l - 1 or self.curLine[i + 1] not in (' ', '=', ';', self.curLine[i + 1]):
-                    if (i == l - 1 or self.curLine[i + 1] != self.curLine[i]) and (i == 0 or self.curLine[i - 1] != self.curLine[i]):
-                        self.printNormError("Espace manquant autour de l'opérateur " + self.curLine[i])
+            elif not quote:
+                if self.curLine[i] in "+-*/%|&<>":
+                    if i == l - 1:
+                        self.printNormError("Opérateur en fin de ligne")
+                    return
+                    if i == l - 1 or self.curLine[i + 1] not in (' ', '=', ';', self.curLine[i + 1]):
+                        if (i == l - 1 or self.curLine[i + 1] != self.curLine[i]) \
+                           and (i == 0 or self.curLine[i - 1] != self.curLine[i]):
+                            self.printNormError("Espace manquant autour de l'opérateur " + self.curLine[i])
+                if self.curLine[i] == ';' and i < l - 1:
+                    self.printNormError("La ligne continue après le point virgule")
 
     def checkFunction(self):
         if self.inTypedef:
             return
         if self.curLine == "}":
-            self.inFunction = False
+            self.inFunction -= 1
             self.funcLinesCount = 0
         elif self.curLine == "{":
             self.functionCount += 1
             if self.functionCount > 5:
                 self.printNormError("Fonction en trop (5 fonctions max)")
-            self.inFunction = True
+            self.inFunction += 1
             self.atLocalDeclaration = True
         elif self.inFunction:
             self.funcLinesCount += 1
@@ -234,7 +242,7 @@ class FileChecker(object):
               + self.path + TermFormat.white + TermFormat.nobold)
         self.funcLinesCount = 0
         self.functionCount = 0
-        self.inFunction = False
+        self.inFunction = 0
         self.atLocalDeclaration = True
         self.inTypedef = False
         self.atSysInc = True
@@ -254,4 +262,6 @@ errCount = 0
 for path in files:
     f = FileChecker(path)
     errCount += f.check()
-print(TermFormat.bold + TermFormat.red + "Vous avez fait", errCount, ("fautes" if errCount > 1 else "faute"), "de norme" + TermFormat.white + TermFormat.nobold)
+print(TermFormat.bold + TermFormat.red + "Vous avez fait", errCount, \
+      ("fautes" if errCount > 1 else "faute"), "de norme" \
+      + TermFormat.white + TermFormat.nobold)

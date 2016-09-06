@@ -13,6 +13,7 @@ Géré :
 * Déclarations d'un prototype dans un .c
 * Fonctions à plus de 4 paramètres
 * Fonctions de plus de 25 lignes
+* Fonctions contenant des fonctions
 * Fichiers comportant plus de 5 fonctions
 * Doubles sauts de ligne
 * Macros non composées de A-Z 0-9
@@ -27,6 +28,8 @@ Géré :
 * Absences d'espace après une virgule
 * Lignes comportant plusieurs instructions
 * ifndef de protection invalides ou manquants
+* Présences d'opérateurs binaires (+, -, etc) en fin de ligne
+* Lignes continuant après un point-virgule
 
 Pas (encore) géré :
 * Déclarations/Affectations sur la même ligne
