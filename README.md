@@ -16,6 +16,7 @@ Géré :
 * Fichiers comportant plus de 5 fonctions
 * Doubles sauts de ligne
 * Macros non composées de A-Z 0-9
+* Macros multilignes
 * Utilisations de define dans un .c
 * Fonctions de la lib C standard
 * Mots-clefs interdits

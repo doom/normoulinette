@@ -57,9 +57,12 @@ class FileChecker(object):
         if re.search(exp, self.curLine):
             if self.path.endswith(".c"):
                 self.printNormError("Utilisation de #define dans un fichier .c")
-            elif re.compile('.*#[ \t]*define[ \t]+[A-Z0-9_]+(\(.*\))?([ \t]|$).*').match(self.curLine) == None:
-                name = self.curLine.replace('\t', ' ').split('define ')[1].split(' ')[0]
-                self.printNormError("Caractères incorrects dans la macro " + name + " (A-Z, 0-9 et _ autorisés)")
+            else:
+                name = self.curLine.replace('\t', ' ').split('define ')[1].split(' ')[0].split('(')[0]
+                if re.compile('.*#[ \t]*define[ \t]+[A-Z0-9_]+(\(.*\))?([ \t]|$).*').match(self.curLine) == None:
+                    self.printNormError("Caractères incorrects dans la macro " + name + " (A-Z, 0-9 et _ autorisés)")
+                if re.compile('.*[ \t]+\\\\[ \t]*$').match(self.curLine):
+                    self.printNormError("La macro " + name + " fait plus d'une ligne")
 
     def checkIncludes(self):
         if self.curLine.startswith("#include") or self.curLine.startswith("# include"):
@@ -249,6 +252,6 @@ class FileChecker(object):
 files = sys.argv[1:] if len(sys.argv) > 1 else listSourceFiles()
 errCount = 0
 for path in files:
-    f = FileChecker(path, True)
+    f = FileChecker(path)
     errCount += f.check()
 print(TermFormat.bold + TermFormat.red + "Vous avez fait", errCount, ("fautes" if errCount > 1 else "faute"), "de norme" + TermFormat.white + TermFormat.nobold)
