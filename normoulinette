@@ -99,7 +99,7 @@ class FileChecker(object):
     def checkProto(self):
         exp = re.compile('[a-z0-9_]+\(([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*)\);?')
         res = re.search(exp, self.curLine)
-        if res:
+        if res and not self.inFunction:
             self.printNormError("La fonction " + res.group().split('(')[0].replace('\t', '    ').split(' ')[-1] \
                                 + "() a plus de 4 paramètres")
         if self.path.endswith(".c") and \
