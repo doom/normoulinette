@@ -3,12 +3,12 @@
 
 import os, sys, re
 
-def listSourceFiles():
+def listSourceFiles(baseDir="."):
     files = []
-    for dirpath, dirnames, filenames in os.walk("."):
+    for dirpath, dirnames, filenames in os.walk(baseDir):
         for f in filenames:
              if f.endswith(".c") or f.endswith(".h"):
-                 files.append(dirpath + '/' + f)
+                 files.append(dirpath + ('/' if dirpath[-1] != '/' else '') + f)
     return files
 
 class TermFormat():
@@ -27,7 +27,7 @@ class FileChecker(object):
         if path.endswith(".h"):
             self.macro = path.split('/')[-1].upper().replace('.', '_') + '_'
 
-    def printNormError(self, msg, globalScope = False):
+    def printNormError(self, msg, globalScope=False):
         self.errCount += 1
         fmt = TermFormat.red + TermFormat.bold + '[' \
               + self.path + (":" + str(self.cur) if not globalScope else "") \
@@ -257,7 +257,13 @@ class FileChecker(object):
                 self.lastWasEmpty = self.checkLine()
         return self.errCount
 
-files = sys.argv[1:] if len(sys.argv) > 1 else listSourceFiles()
+if len(sys.argv) > 1:
+    files = []
+    for arg in sys.argv[1:]:
+        files += listSourceFiles(arg) if (os.path.isdir(arg)) else [arg]
+else:
+    files = listSourceFiles()
+
 errCount = 0
 for path in files:
     f = FileChecker(path)
