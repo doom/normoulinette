@@ -152,28 +152,14 @@ class FileChecker(object):
         elif self.inTypedef and re.compile('}[ \t]+.*').match(self.curLine):
             self.inTypedef = False
             if not self.curLine.replace('\t', ' ').split(' ')[-1].startswith("t_"):
-                self.printNormError("Typedef sans t_")
+                self.printNormError("Nom de typedef sans t_")
 
-    def checkStruct(self):#EPIC
-        exp = re.compile('struct[ \t]+[a-z0-9_]+')
+    def checkTypeKeyword(self, keyword, desc):
+        exp = re.compile(keyword + '\t+[a-z0-9_]+')
         res = re.search(exp, self.curLine)
         if res:
-            if not res.group().replace('\t', ' ').split(' ')[-1].startswith("s_"):
-                self.printNormError("Nom de structure sans s_")
-
-    def checkEnum(self):#DUPLICATION
-        exp = re.compile('enum[ \t]+[a-z0-9_]+')
-        res = re.search(exp, self.curLine)
-        if res:
-            if not res.group().replace('\t', ' ').split(' ')[-1].startswith("e_"):
-                self.printNormError("Nom d'énumération sans e_")
-
-    def checkUnion(self):#DE CODE
-        exp = re.compile('union[ \t]+[a-z0-9_]+')
-        res = re.search(exp, self.curLine)
-        if res:
-            if not res.group().replace('\t', ' ').split(' ')[-1].startswith("u_"):
-                self.printNormError("Nom d'union sans u_")
+            if not res.group().replace('\t', ' ').split(' ')[-1].startswith(keyword[0] + '_'):
+                self.printNormError("Nom " + desc + " sans " + keyword[0] + "_")
 
     def checkOperators(self):
         l = len(self.curLine)
@@ -224,9 +210,9 @@ class FileChecker(object):
         self.checkIncludes()
         self.checkTypedef()
         if self.path.endswith(".h"):
-            self.checkEnum()
-            self.checkUnion()
-            self.checkStruct()
+            self.checkTypeKeyword("struct", "de structure")
+            self.checkTypeKeyword("enum", "d'énumération")
+            self.checkTypeKeyword("union", "d'union")
             self.checkProtectMacro()
         elif self.path.endswith(".c"):
             self.checkForbidden()
