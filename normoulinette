@@ -18,8 +18,46 @@ class TermFormat():
     bold="\033[1m"
     nobold="\033[21m"
 
+class SourceLine(str):
+    def __new__(cls, data):
+        self = str.__new__(cls, data)
+        self.quotedZones = []
+        self.commentedZones = []
+        self.findQuotedZones()
+        self.findCommentedZones()
+        return self
+
+    def addQuotedZone(self, zone):
+        self.quotedZones.append(zone)
+
+    def addCommentedZone(self, zone):
+        self.commentedZones.append(zone)
+
+    def isInQuotedZone(self, idx):
+        for z in self.quotedZones:
+            if idx in z:
+                return True
+        return False
+
+    def isInCommentedZone(self, idx):
+        for z in self.commentedZones:
+            if idx in z:
+                return True
+        return False
+
+    def findCommentedZones(self):
+        for m in re.finditer(r'/\*.*\*/', self):
+            self.addCommentedZone(range(m.start(0), m.end(0)))
+
+    def findQuotedZones(self):
+        for m in re.finditer(r'(?:"[^"]*\\(?:.[^"]*\\)*.[^"]*")|(?:"[^"]*")', self):
+            self.addQuotedZone(range(m.start(0), m.end(0)))
+
+    def isInCode(self, idx):
+        return not (self.isInCommentedZone(idx) or self.isInQuotedZone(idx))
+
 class FileChecker(object):
-    """Une classe qui check les fichiers. Etonnant n'est-ce pas ?"""
+    """Une classe qui vérifie la norme des fichiers .c, .h et Makefile"""
     def __init__(self, path, libcCheck=False):
         self.path = path
         self.libcCheck = libcCheck
@@ -28,219 +66,262 @@ class FileChecker(object):
             self.macro = path.split('/')[-1].upper().replace('.', '_') + '_'
 
     def printNormError(self, msg, globalScope=False):
+        """Affiche une erreur de norme"""
         self.errCount += 1
         fmt = TermFormat.red + TermFormat.bold + '[' \
-              + self.path + (":" + str(self.cur) if not globalScope else "") \
+              + self.path + (":" + str(self.cur + 1) if not globalScope else "") \
               + "] " + TermFormat.white
         print(fmt + msg + TermFormat.nobold)
 
-    @property
-    def curLine(self):
-        return self.lines[self.cur - 1]
+    def isFound(self, res):
+        """Teste si l'objet passé en paramètre correspond à un match valide"""
+        return res and self.line.isInCode(res.start(0))
 
     def checkHeaderLine(self):
-        if self.cur == 1 and self.curLine != "/*":
+        """Vérifie (basiquement) la présence du header Epitech"""
+        if (self.cur == 0 and self.line != "/*") \
+           or (self.cur == 8 and self.line != "*/") \
+           or (self.cur not in (0, 8) and not self.line.startswith("**")):
             self.printNormError("Header invalide")
-        elif self.cur == 9 and self.curLine != "*/":
-            self.printNormError("Header invalide")
-        elif self.cur not in (1, 9) and not self.curLine.startswith("**"):
-            self.printNormError("Header invalide")
+            self.inHeader = False
 
-    def checkProtectMacro(self):
-        if self.cur == 11 and self.curLine != "#ifndef " + self.macro:
-            self.printNormError("#ifndef de protection invalide")
-        elif self.cur == 12 and self.curLine != "# define " + self.macro:
-            self.printNormError("# define de protection invalide")
-        elif self.cur == len(self.lines) and self.curLine != "#endif /* !" + self.macro + " */":
-            self.printNormError("#endif de protection invalide")
+    def checkCommon(self):
+        """Vérifie la longueur de la ligne et la présence d'espaces en trop à la fin"""
+        tmp = self.line.replace('\t', '    ')
+        l = len(tmp)
+        if l > 80:
+            self.printNormError("Ligne trop longue ({} > 80)".format(l))
+        if l > 0 and tmp[-1] == ' ':
+            self.printNormError("Espace en fin de ligne")
+        i = 0
+        found = 0
+        for m in re.finditer(";", self.line):
+            if self.isFound(m):
+                found += 1
+            if found == 2:
+                self.printNormError("Ligne multi-instructions")
+                break
 
-    def checkNormalMacro(self):
-        exp = re.compile('#[ \t]*define')
-        if re.search(exp, self.curLine):
-            if self.path.endswith(".c"):
-                self.printNormError("Utilisation de #define dans un fichier .c")
+    def checkComments(self):
+        """Vérifie la présence et la validité des commentaires"""
+        if len(self.line.commentedZones) and self.inFunction:
+            self.printNormError("Commentaire dans le code")
+        pos = self.line.find("//")
+        if pos != -1 and self.line.isInCode(pos):
+            self.printNormError("Mauvais type de commentaire")
+            self.line = SourceLine(self.line.split("//")[0])
+        endPos = self.line.find("*/")
+        if self.inComment:
+            if endPos != -1 and not self.line.isInQuotedZone(endPos):
+                self.line = SourceLine(self.line[endPos + 2:])
+                return False
             else:
-                name = self.curLine.replace('\t', ' ').split('define ')[1].split(' ')[0].split('(')[0]
-                if re.compile('.*#[ \t]*define[ \t]+[A-Z0-9_]+(\(.*\))?([ \t]|$).*').match(self.curLine) == None:
-                    self.printNormError("Caractères incorrects dans la macro " + name + " (A-Z, 0-9 et _ autorisés)")
-                if re.compile('.*[ \t]+\\\\[ \t]*$').match(self.curLine):
-                    self.printNormError("La macro " + name + " fait plus d'une ligne")
+                return True
+        pos = self.line.find("/*")
+        if pos != -1 and not self.line.isInQuotedZone(pos) \
+           and (endPos == -1 or self.line.isInQuotedZone(endPos)):
+            if self.inFunction:
+                self.printNormError("Commentaire dans le code")
+            self.line = SourceLine(self.line[:pos])
+            return True
+        return False
 
     def checkIncludes(self):
-        if self.curLine.startswith("#include") or self.curLine.startswith("# include"):
-            if self.curLine[-1] == '"' and self.atSysInc:
+        """Vérifie l'ordre des directives #include"""
+        a, b = self.line.startswith("#include"), self.line.startswith("# include")
+        if b and self.path.endswith(".c") or (a and self.path.endswith(".h")):
+            self.printNormError("#include mal indenté")
+        if a or b:
+            if self.line[-1] == '"' and self.atSysInc:
                 self.atSysInc = False
-            elif self.curLine[-1] == '>' and self.atSysInc == False:
+            elif self.line[-1] == '>' and not self.atSysInc:
                 self.printNormError("#include système mal placé")
 
-    def checkForbidden(self):
-        exp = re.compile('[ \t](goto|for|switch)([ \t\(])')
-        res = re.search(exp, self.curLine)
-        if res:
-            self.printNormError("Mot-clef interdit : " + res.group()[1:-1])
-        if self.libcCheck:
-            exp = re.compile('[ \t](printf|dprintf|strlen|strcpy|strcat|strcmp|strncmp|strdup|memmove|memcpy|memcmp|calloc)([ \t\(])')
-            res = re.search(exp, self.curLine)
-            if res:
-                self.printNormError("Fonction interdite : " + res.group()[1:-1])
+    def checkNormalMacro(self):
+        """Vérifie les placements, les noms et les longueurs des macros"""
+        exp = re.compile('#[ \t]*define')
+        if self.isFound(re.search(exp, self.line)):
+            if self.path.endswith(".c"):
+                self.printNormError("Utilisation de #define dans un fichier .c")
+            name = self.line.replace('\t', ' ').split('define ')[1].split(' ')[0].split('(')[0]
+            if re.compile('[A-Z0-9_]+').match(name) == None:
+                self.printNormError("Caractères incorrects dans la macro " + name + " (A-Z, 0-9 et _ autorisés)")
+            if re.compile('\\\\[ \t]*$').search(self.line):
+                self.printNormError("La macro " + name + " fait plus d'une ligne")
 
     def checkDeclaration(self):
-        if (self.path.endswith(".c") and not self.inFunction) or self.path.endswith(".h"):
-            exp = re.compile('[a-z]*[ \t]*[a-z0-9_]+[ \t]+[a-z_]+\[?[A-Z0-9]*\][ \t]*[;=]+[ \t]*')
-            res = re.search(exp, self.curLine)
-            if res:
-                exp = re.compile('[a-z]*[ \t]*[a-z0-9_]+[ \t]+g_[a-z_]+\[?[A-Z0-9]*\][ \t]*[;=]+[ \t]*')
-                res = re.search(exp, self.curLine)
+        """Vérifie les déclarations de variables"""
+        exp = re.compile('(static )?(const )?[a-z0-9_]+[ \t]+(\*)?[a-z0-9_]+(\[?[A-Z0-9_]*\])*[ \t]*[;=][ \t]*')
+        if self.isFound(re.search(exp, self.line)) and self.line.find("typedef") == -1:
+            if not self.inFunction and not self.inStruct:
+                exp = re.compile('(static )?(const )?[a-z0-9_]+[ \t]+(\*)?g_[a-z0-9_]+(\[?[A-Z0-9_]*\])*[ \t]*[;=][ \t]*')
+                res = re.search(exp, self.line)
                 if res == None:
                     self.printNormError("Nom de globale sans g_")
         elif self.path.endswith(".c") and self.inFunction:
             return
 
-    def checkProto(self):
-        exp = re.compile('[a-z0-9_]+\(([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*),([^\(\)]*)\);?')
-        res = re.search(exp, self.curLine)
-        if res and not self.inFunction:
-            self.printNormError("La fonction " + res.group().split('(')[0].replace('\t', '    ').split(' ')[-1] \
-                                + "() a plus de 4 paramètres")
-        if self.path.endswith(".c") and \
-           re.compile('[ \t]*[a-z]*[ \t]*[a-z]*[ \t]*[a-z]+[ \t]+[a-zA-Z0-9_]+\(.*\);[ \t]*$').match(self.curLine):
-            self.printNormError("Déclaration d'un prototype dans un fichier .c")
-
-    def checkCommon(self):
-        """Lignes trop longues, espaces, commentaires"""
-        tmp = self.curLine.replace('\t', '    ')
-        l = len(tmp)
-        if l > 80:
-            self.printNormError("Ligne trop longue")
-        elif l > 0 and tmp[-1] == ' ':
-            self.printNormError("Espace en fin de ligne")
-        exp = re.compile('//')
-        if re.search(exp, self.curLine):
-            self.printNormError("Mauvais type de commentaire"
-                                + (" (et dans le code en plus !)" if self.inFunction else ""))
-            self.lines[self.cur - 1] = self.curLine.split("//")[0]
-        exp = re.compile('/\*')
-        if re.search(exp, self.curLine) and self.inFunction:
-            self.printNormError("Commentaire dans le code")
-            self.lines[self.cur - 1] = self.curLine.split("/*")[0]
-
     def checkSpaces(self):
-        """Espaces après les Mots-clefs"""
+        """Vérifie la présence d'espace après les mots-clefs"""
         if self.path.endswith(".c"):
-            exp = re.compile('[ \t](if|else|return|while)(\()')
-            res = re.search(exp, self.curLine)
-            if res:
+            exp = re.compile('[ \t](if|else|return|while)[^ \t]')
+            res = re.search(exp, self.line)
+            if self.isFound(res):
                 self.printNormError("Espace manquant après le mot-clef " + res.group()[1:-1])
-            if self.curLine.find('return') >= 0 and self.curLine.find('return ;') < 0 \
-               and re.compile('.*return \(.*').match(self.curLine) == None:
-                self.printNormError("Utilisation du mot-clef return sans parenthèses")
-        l = len(self.curLine)
-        for i in range(0, l):
-            if self.curLine[i] == ',' and i < l - 1 and self.curLine[i + 1] not in (' ', '\'', '"'):
-                self.printNormError("Espace manquant après une virgule")
+        if self.isFound(re.compile("return[ \t]+[^;\(]+").search(self.line)):
+            self.printNormError("Parenthèses manquantes après le mot-clef return")
+        l = len(self.line)
+        p = self.line.find(',')
+        while p != -1:
+            if p < l - 1 and self.line[p + 1] not in ' \t' and not self.line.isInQuotedZone(p):
+                self.printNormError("Espace manquant après la virgule")
+            p = self.line.find(',', p + 1)
 
-    def checkTypedef(self):
-        if re.compile('[ \t]*typedef[ \t]+.*').match(self.curLine):
-            if self.curLine.find(';') > 0:
-                s = self.curLine.replace('\t', ' ').split(' ')[-1]
-                if not s.startswith("t_") and not s.startswith("*t_"):
-                    self.printNormError("Nom de typedef sans t_")
-            else:
-                self.inTypedef = True
-            if self.path.endswith(".c"):
-                self.printNormError("Utilisation du mot-clef typedef dans un fichier .c")
-        elif self.inTypedef and re.compile('}[ \t]+.*').match(self.curLine):
-            self.inTypedef = False
-            if not self.curLine.replace('\t', ' ').split(' ')[-1].startswith("t_"):
-                self.printNormError("Nom de typedef sans t_")
-
-    def checkTypeKeyword(self, keyword, desc):
-        exp = re.compile(keyword + '\t+[a-z0-9_]+')
-        res = re.search(exp, self.curLine)
+    def checkProto(self):
+        """Vérifie les prototypes et les définitions de fonctions"""
+        exp = re.compile('(static )?(inline )?(const )?[a-z0-9_]+[ \t]+(\*)*[a-zA-Z0-9_]+'
+                         '\(([a-zA-Z0-9_]+[ \t]+[a-zA-Z0-9_]+,?)+\)[ \t]*;?')
+        res = re.search(exp, self.line)
         if res:
-            if not res.group().replace('\t', ' ').split(' ')[-1].startswith(keyword[0] + '_'):
-                self.printNormError("Nom " + desc + " sans " + keyword[0] + "_")
-
-    def checkOperators(self):
-        l = len(self.curLine)
-        quote = False
-        for i in range(0, l):
-            if self.curLine[i] == '"':
-                quote = not quote
-            elif not quote:
-                if self.curLine[i] in "+-*/%|&<>":
-                    if i == l - 1:
-                        self.printNormError("Opérateur en fin de ligne")
-                    return
-                    if i == l - 1 or self.curLine[i + 1] not in (' ', '=', ';', self.curLine[i + 1]):
-                        if (i == l - 1 or self.curLine[i + 1] != self.curLine[i]) \
-                           and (i == 0 or self.curLine[i - 1] != self.curLine[i]):
-                            self.printNormError("Espace manquant autour de l'opérateur " + self.curLine[i])
-                if self.curLine[i] == ';' and i < l - 1:
-                    self.printNormError("La ligne continue après le point virgule")
+            m = re.search('[a-zA-Z0-9]+\(', res.group())
+            name = self.line[m.start(0):m.end(0) - 1]
+            params = self.line[m.end(0):self.line.rfind(')')]
+            if re.findall("[A-Z]+", name):
+                self.printNormError("Majuscule dans le nom de la fonction " + name)
+            if self.line[res.end(0) - 1] == ';':
+                if self.path.endswith(".c"):
+                    self.printNormError("Déclaration d'un prototype dans un fichier .c")
+            else:
+                if self.path.endswith(".h"):
+                    self.printNormError("Implémentation d'une fonction dans un fichier .h")
 
     def checkFunction(self):
-        if self.inTypedef:
-            return
-        if self.curLine == "}":
+        """Vérifie le nombre de lignes d'une fonction, et le nombre de fonctions"""
+        if self.line == "}":
             self.inFunction -= 1
+        elif self.line == "{":
+            self.inFunction += 1
             self.funcLinesCount = 0
-        elif self.curLine == "{":
             self.functionCount += 1
             if self.functionCount > 5:
                 self.printNormError("Fonction en trop (5 fonctions max)")
-            self.inFunction += 1
-            self.atLocalDeclaration = True
-        elif self.inFunction:
+        elif self.inFunction > 0:
             self.funcLinesCount += 1
-            if self.funcLinesCount >= 25:
+            if self.funcLinesCount > 25:
                 self.printNormError("Ligne en trop dans la fonction (25 lignes max)")
 
+    def checkTypedef(self):
+        """Vérifie la validité des noms de types personnalisés"""
+        if self.line.startswith("typedef"):
+            if self.line[-1] != ';':
+                lastWord = self.line.rsplit(None, 1)[-1]
+                typeName = (lastWord[2:] if lastWord[:2] in ("s_", "e_", "u_") else lastWord)
+                self.typedefs.append((self.inStruct + 1, "t_" + typeName))
+            else:
+                words = re.findall('[\w\']+', self.line)
+                if not words[-1].startswith("t_"):
+                    self.printNormError("Nom de type personnalisé sans t_")
+                elif len(words) == 4 and words[1] in ("struct", "enum", "union") \
+                     and words[2][1] == '_' and words[2][2:] != words[3][2:]:
+                    self.printNormError("Le nom du type devrait être t" + words[2][1:])
+
+    def checkStruct(self):
+        """Vérifie la définition d'une structure ou d'une union"""
+        if self.isFound(re.match("[ \t]*(typedef[ \t]*)?(struct|union)[ \t]+[_a-zA-Z0-9]+$", self.line)) \
+           and self.line[-1] != ';':
+            self.inStruct += 1
+        res = re.search(re.compile("}.*;"), self.line)
+        if self.inStruct and self.isFound(res):
+            if len(self.typedefs) and self.typedefs[-1][0] == self.inStruct:
+                lastWord = self.line.rsplit(None, 1)[-1]
+                typeName = self.typedefs.pop()[1]
+                if typeName != lastWord[:-1]:
+                    self.printNormError("Le nom du type devrait être " + typeName)
+            self.inStruct -= 1
+
+    def checkTypeKeyword(self, keyword, desc):
+        """Vérifie la nomination des types définis dans le programme"""
+        res = re.match("[ \t]*(typedef[ \t]*)?" + keyword + '[ \t]+[_a-zA-Z0-9_]+;?$', self.line)
+        if self.isFound(res):
+            if not res.group().replace('\t', ' ').split(' ')[-1].startswith(keyword[0] + '_'):
+                self.printNormError("Nom " + desc + " sans " + keyword[0] + "_")
+
+    def checkProtectMacro(self):
+        """Vérifie la présence et la syntaxe de la macro de protection des fichier .h"""
+        if self.cur == 10 and self.line != "#ifndef " + self.macro:
+            self.printNormError("#ifndef de protection invalide")
+        elif self.cur == 11 and self.line != "# define " + self.macro:
+            self.printNormError("# define de protection invalide")
+        elif self.cur == len(self.lines) and self.line != "#endif /* !" + self.macro + " */":
+            self.printNormError("#endif de protection invalide")
+
+    def checkForbidden(self):
+        """Vérifie la présence de fonctions et de mots-clefs interdits par la norme"""
+        exp = re.compile('[ \t](goto|for|switch)([ \t\(])')
+        res = re.search(exp, self.line)
+        if self.isFound(res):
+            self.printNormError("Mot-clef interdit : " + res.group()[1:-1])
+        if self.libcCheck:
+            exp = re.compile('[ \t](strcat|strchr|strcmp|strcoll|strcoll_l|strcpy|strcspn|strdup'
+                             '|strerror|strerror_l|strerror_r|strlen|strncat|strncmp|strncpy'
+                             '|strndup|strnlen|strpbrk|strrchr|strsignal|strspn|strstr|strtok'
+                             '|strtok_r|strxfrm|strncmp|strdup|memmove|memcpy|memcmp|calloc'
+                             '|realloc|printf|dprintf)([ \t\(])')
+            res = re.search(exp, self.line)
+            if self.isFound(res):
+                self.printNormError("Fonction interdite : " + res.group()[1:-1])
+
     def checkLine(self):
-        if self.curLine == "":
+        """Vérifie le respect de la norme sur la ligne courante"""
+        if self.cur <= 8 and self.inHeader:
+            self.checkHeaderLine()
+            return
+        if not self.line:
             if self.lastWasEmpty:
                 self.printNormError("Double ligne vide")
-            return True
+            self.lastWasEmpty = True
+            return
+        self.lastWasEmpty = False
         self.checkCommon()
-        self.checkDeclaration()
-        self.checkProto()
-        self.checkNormalMacro()
-        self.checkSpaces()
-        self.checkOperators()
-        self.checkIncludes()
-        self.checkTypedef()
-        if self.path.endswith(".h"):
+        self.inComment = self.checkComments()
+        if not self.inComment:
+            self.checkIncludes()
+            if self.path.endswith(".h"):
+                self.checkProtectMacro()
+            self.checkNormalMacro()
+            self.checkTypedef()
+            self.checkStruct()
             self.checkTypeKeyword("struct", "de structure")
             self.checkTypeKeyword("enum", "d'énumération")
             self.checkTypeKeyword("union", "d'union")
-            self.checkProtectMacro()
-        elif self.path.endswith(".c"):
-            self.checkForbidden()
-            self.checkFunction()
-        return False
+            self.checkDeclaration()
+            self.checkSpaces()
+            self.checkProto()
+            if self.inStruct == 0:
+                self.checkFunction()
+                self.checkForbidden()
 
     def check(self):
+        """Vérifie le respect de la norme dans le fichier associé"""
         with open(self.path, 'r') as f:
             self.lines = f.read().splitlines()
         if self.path.startswith("./"):
             self.path = self.path[2:]
         print(TermFormat.bold + "Lecture de " + TermFormat.cyan
               + self.path + TermFormat.white + TermFormat.nobold)
-        self.funcLinesCount = 0
-        self.functionCount = 0
-        self.inFunction = 0
-        self.atLocalDeclaration = True
-        self.inTypedef = False
-        self.atSysInc = True
-        self.lastWasEmpty = False
         self.errCount = 0
-        self.cur = 0
-        for i in self.lines:
-            self.cur += 1
-            if self.cur <= 9:
-                self.checkHeaderLine()
-            else:
-                self.lastWasEmpty = self.checkLine()
+        self.lastWasEmpty = False
+        self.inComment = False
+        self.inHeader = True
+        self.atSysInc = True
+        self.inStruct = 0
+        self.inFunction = 0
+        self.functionCount = 0
+        self.typedefs = []
+        for self.cur, l in enumerate(self.lines):
+            line = SourceLine(l)
+            self.line = line
+            self.checkLine()
         return self.errCount
 
 if len(sys.argv) > 1:

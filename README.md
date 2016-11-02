@@ -1,5 +1,6 @@
 # normoulinette
-(Encore) une moulinette de norme Epitech, mais codée en Python et dégoulinante de swag
+(Encore) une moulinette de norme Epitech, mais codée en Python et dégoulinante de swag.
+Et plutôt rapide aussi (en tout cas, sur des morceaux de codes variés, elle atteint une vitesse de 25000 lignes par seconde)
 
 Géré :
 * Lignes de plus de 80 colonnes
@@ -24,17 +25,19 @@ Géré :
 * Absences d'espace après les mots-clefs
 * Absences de parenthèses après un return non-void
 * Ordre des includes
+* Indentation des includes dans les .h
 * Présence du header Epitech
 * Absences d'espace après une virgule
-* Lignes comportant plusieurs instructions
+* Lignes comportant plusieurs instructions (plusieurs points-virgules)
 * ifndef de protection invalides ou manquants
 * Présences d'opérateurs binaires (+, -, etc) en fin de ligne
-* Lignes continuant après un point-virgule
+* Déclarations de structures dans des structures
+* typedefs de s_struct en t_struct obligatoirement
 
 Pas (encore) géré :
+* Absences d'espaces avant et après un opérateur binaire
 * Déclarations/Affectations sur la même ligne
 * Saut de ligne entre déclarations et reste du code
-* typedefs de s_struct en t_struct obligatoirement
 * Détection de l'indentation
 * Saut de ligne après une structure de contrôle
 * Symbole du pointeur (*) jamais sur le nom de type
