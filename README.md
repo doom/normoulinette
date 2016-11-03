@@ -32,7 +32,7 @@ Géré :
 * ifndef de protection invalides ou manquants
 * Présences d'opérateurs binaires (+, -, etc) en fin de ligne
 * Déclarations de structures dans des structures
-* typedefs de s_struct en t_struct obligatoirement
+* typedefs de s_type, e_type et u_type en t_type obligatoirement
 
 Pas (encore) géré :
 * Absences d'espaces avant et après un opérateur binaire

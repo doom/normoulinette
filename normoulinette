@@ -173,7 +173,7 @@ class FileChecker(object):
         l = len(self.line)
         p = self.line.find(',')
         while p != -1:
-            if p < l - 1 and self.line[p + 1] not in ' \t' and not self.line.isInQuotedZone(p):
+            if p < l - 1 and self.line[p + 1] not in ' \t\'' and not self.line.isInQuotedZone(p):
                 self.printNormError("Espace manquant après la virgule")
             p = self.line.find(',', p + 1)
 
@@ -216,10 +216,10 @@ class FileChecker(object):
             if self.line[-1] != ';':
                 lastWord = self.line.rsplit(None, 1)[-1]
                 typeName = (lastWord[2:] if lastWord[:2] in ("s_", "e_", "u_") else lastWord)
-                self.typedefs.append((self.inStruct + 1, "t_" + typeName))
+                self.typedefs.append("t_" + typeName)
             else:
                 words = re.findall('[\w\']+', self.line)
-                if not words[-1].startswith("t_"):
+                if not words[-1].startswith("t_") and self.line.find("(*") == -1:
                     self.printNormError("Nom de type personnalisé sans t_")
                 elif len(words) == 4 and words[1] in ("struct", "enum", "union") \
                      and words[2][1] == '_' and words[2][2:] != words[3][2:]:
@@ -227,14 +227,14 @@ class FileChecker(object):
 
     def checkStruct(self):
         """Vérifie la définition d'une structure ou d'une union"""
-        if self.isFound(re.match("[ \t]*(typedef[ \t]*)?(struct|union)[ \t]+[_a-zA-Z0-9]+$", self.line)) \
+        if self.isFound(re.match("[ \t]*(typedef[ \t]*)?(struct|union|enum)[ \t]+[_a-zA-Z0-9]+$", self.line)) \
            and self.line[-1] != ';':
             self.inStruct += 1
         res = re.search(re.compile("}.*;"), self.line)
         if self.inStruct and self.isFound(res):
-            if len(self.typedefs) and self.typedefs[-1][0] == self.inStruct:
+            if len(self.typedefs):
                 lastWord = self.line.rsplit(None, 1)[-1]
-                typeName = self.typedefs.pop()[1]
+                typeName = self.typedefs.pop()
                 if typeName != lastWord[:-1]:
                     self.printNormError("Le nom du type devrait être " + typeName)
             self.inStruct -= 1
