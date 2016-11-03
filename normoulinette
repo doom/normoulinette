@@ -216,7 +216,7 @@ class FileChecker(object):
             if self.line[-1] != ';':
                 lastWord = self.line.rsplit(None, 1)[-1]
                 typeName = (lastWord[2:] if lastWord[:2] in ("s_", "e_", "u_") else lastWord)
-                self.typedefs.append("t_" + typeName)
+                self.typedefs.append((self.inStruct + 1, "t_" + typeName))
             else:
                 words = re.findall('[\w\']+', self.line)
                 if not words[-1].startswith("t_") and self.line.find("(*") == -1:
@@ -227,14 +227,14 @@ class FileChecker(object):
 
     def checkStruct(self):
         """Vérifie la définition d'une structure ou d'une union"""
-        if self.isFound(re.match("[ \t]*(typedef[ \t]*)?(struct|union|enum)[ \t]+[_a-zA-Z0-9]+$", self.line)) \
+        if self.isFound(re.match("[ \t]*(typedef[ \t]*)?(struct|union|enum)([ \t]+[_a-zA-Z0-9]+)?$", self.line)) \
            and self.line[-1] != ';':
             self.inStruct += 1
         res = re.search(re.compile("}.*;"), self.line)
         if self.inStruct and self.isFound(res):
-            if len(self.typedefs):
+            if len(self.typedefs) and self.typedefs[-1][0] == self.inStruct:
                 lastWord = self.line.rsplit(None, 1)[-1]
-                typeName = self.typedefs.pop()
+                typeName = self.typedefs.pop()[1]
                 if typeName != lastWord[:-1]:
                     self.printNormError("Le nom du type devrait être " + typeName)
             self.inStruct -= 1
