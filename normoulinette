@@ -58,7 +58,7 @@ class SourceLine(str):
 
 class FileChecker(object):
     """Une classe qui vérifie la norme des fichiers .c, .h et Makefile"""
-    def __init__(self, path, libcCheck=False):
+    def __init__(self, path, libcCheck=True):
         self.path = path
         self.libcCheck = libcCheck
         self.lines = None
