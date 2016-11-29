@@ -58,7 +58,7 @@ class SourceLine(str):
 
 class FileChecker(object):
     """Une classe qui vérifie la norme des fichiers .c, .h et Makefile"""
-    def __init__(self, path, libcCheck=False):
+    def __init__(self, path, libcCheck=True):
         self.path = path
         self.libcCheck = libcCheck
         self.lines = None
@@ -266,7 +266,7 @@ class FileChecker(object):
                              '|strerror|strerror_l|strerror_r|strlen|strncat|strncmp|strncpy'
                              '|strndup|strnlen|strpbrk|strrchr|strsignal|strspn|strstr|strtok'
                              '|strtok_r|strxfrm|strncmp|strdup|memmove|memcpy|memcmp|calloc'
-                             '|realloc|printf|dprintf)([ \t\(])')
+                             '|realloc|printf|dprintf|atoi|atof)([ \t\(])')
             res = re.search(exp, self.line)
             if self.isFound(res):
                 self.printNormError("Fonction interdite : " + res.group()[1:-1])
