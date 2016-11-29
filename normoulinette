@@ -322,6 +322,8 @@ class FileChecker(object):
             line = SourceLine(l)
             self.line = line
             self.checkLine()
+        if self.lastWasEmpty:
+            self.printNormError("Ligne vide en fin de fichier")
         return self.errCount
 
 if len(sys.argv) > 1:
